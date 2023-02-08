@@ -1,0 +1,22 @@
+{
+  "name": "vow_launchpad",
+  "version": "1.0.0",
+  "description": "Launchpad",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/MhdShahil/Vow_Launchpad.git"
+  },
+  "author": "shahil",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/MhdShahil/Vow_Launchpad/issues"
+  },
+  "homepage": "https://github.com/MhdShahil/Vow_Launchpad#readme"
+}
