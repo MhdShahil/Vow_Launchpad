@@ -18,5 +18,8 @@
   "bugs": {
     "url": "https://github.com/MhdShahil/Vow_Launchpad/issues"
   },
-  "homepage": "https://github.com/MhdShahil/Vow_Launchpad#readme"
+  "homepage": "https://github.com/MhdShahil/Vow_Launchpad#readme",
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.8.1"
+  }
 }
