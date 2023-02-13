@@ -20,6 +20,9 @@
   },
   "homepage": "https://github.com/MhdShahil/Vow_Launchpad#readme",
   "dependencies": {
-    "@openzeppelin/contracts": "^4.8.1"
+    "@chainlink/contracts": "^0.6.1",
+    "@openzeppelin/contracts": "^4.8.1",
+    "@truffle/hdwallet-provider": "^2.1.6",
+    "dotenv": "^16.0.3"
   }
 }

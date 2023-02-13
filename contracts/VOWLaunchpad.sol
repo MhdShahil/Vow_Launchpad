@@ -16,7 +16,6 @@ contract VOWLaunchpad is VOWControl {
     uint256 public ETHFromFailedTransfers; // ETH left in the contract from failed transfers
 
     struct Project {
-        address projectOwner; // Address of the Project owner
         uint256 targetAmountInVow; // Funds targeted to be raised for the project
         uint256 minInvestmentAmountInVow; // Minimum amount of payment token that can be invested
         address projectToken; // Address of the Project token
@@ -166,7 +165,7 @@ contract VOWLaunchpad is VOWControl {
      * @notice This method is used to add a new project
      * @dev This method can only be called by the contract owner
      * @param projectId ID of the Project to be added
-     * @param projectOwner Address of the Project owner
+    
      * @param targetAmountInVow Targeted amount to be raised in Project
      * @param minInvestmentAmountInVow Minimum amount of payment token that can be invested in Project
      * @param projectToken Address of Project token
@@ -175,7 +174,6 @@ contract VOWLaunchpad is VOWControl {
      */
     function addProject(
         string calldata projectId,
-        address projectOwner,
         uint256 targetAmountInVow,
         uint256 minInvestmentAmountInVow,
         address projectToken,
@@ -199,7 +197,6 @@ contract VOWLaunchpad is VOWControl {
         );
 
         _projects[projectId] = Project(
-            projectOwner,
             targetAmountInVow,
             minInvestmentAmountInVow,
             projectToken,
