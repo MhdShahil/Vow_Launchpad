@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "../interfaces/IVOWController.sol";
@@ -7,10 +7,9 @@ import "../interfaces/IVOWController.sol";
 contract VOWControl is Initializable {
     IVOWController public vowController;
 
-    function __VOWControl_init(address _vowController)
-        internal
-        onlyInitializing
-    {
+    function __VOWControl_init(
+        address _vowController
+    ) internal onlyInitializing {
         require(
             _vowController != address(0),
             "VOWControl: zero controller address"

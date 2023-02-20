@@ -22,7 +22,10 @@
   "dependencies": {
     "@chainlink/contracts": "^0.6.1",
     "@openzeppelin/contracts": "^4.8.1",
+    "@openzeppelin/test-helpers": "^0.5.16",
     "@truffle/hdwallet-provider": "^2.1.6",
-    "dotenv": "^16.0.3"
+    "dotenv": "^16.0.3",
+    "solc": "^0.8.17",
+    "truffle": "^5.7.6"
   }
 }

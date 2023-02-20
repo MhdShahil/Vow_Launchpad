@@ -48,20 +48,20 @@ module.exports = {
     development: {
       host: "127.0.0.1", // Localhost (default: none)
       port: 8545, // Standard Ethereum port (default: none)
-      network_id: "*", // Any network (default: none)
+      network_id: "1", // Any network (default: none)
     },
-    goerli: {
-      networkCheckTimeout: 60000,
-      provider: () =>
-        new HDWalletProvider(
-          mnemonic,
-          `wss://goerli.infura.io/v3/${infuraProjectId}`
-        ),
-      network_id: 5,
-      confirmations: 2,
-      timeoutBlocks: 1000,
-      skipDryRun: true,
-    },
+    // goerli: {
+    //   networkCheckTimeout: 60000,
+    //   provider: () =>
+    //     new HDWalletProvider(
+    //       mnemonic,
+    //       `wss://goerli.infura.io/v3/${infuraProjectId}`
+    //     ),
+    //   network_id: 5,
+    //   confirmations: 2,
+    //   timeoutBlocks: 1000,
+    //   skipDryRun: true,
+    // },
     //
     // An additional network, but with some advanced options…
     // advanced: {
@@ -100,7 +100,7 @@ module.exports = {
   // Configure your compilers
   compilers: {
     solc: {
-      version: "0.8.16", // Fetch exact version from solc-bin (default: truffle's version)
+      version: "0.8.17", // Fetch exact version from solc-bin (default: truffle's version)
       // docker: true,        // Use "0.5.1" you've installed locally with docker (default: false)
       // settings: {          // See the solidity docs for advice about optimization and evmVersion
       //  optimizer: {

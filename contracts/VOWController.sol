@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
 contract VOWController {
     address public vow; // Address of VOW token
@@ -39,10 +39,9 @@ contract VOWController {
      * @dev Only the admin can call this function
      * @param _vowPotentialAdmin Address of the potential admin
      */
-    function addPotentialAdmin(address _vowPotentialAdmin)
-        external
-        onlyVowAdmin
-    {
+    function addPotentialAdmin(
+        address _vowPotentialAdmin
+    ) external onlyVowAdmin {
         require(
             _vowPotentialAdmin != address(0),
             "VOWController: potential admin zero"
@@ -100,10 +99,9 @@ contract VOWController {
      * @dev Only the admin can call this function
      * @param _projectSwapWallet Address of the project swap wallet
      */
-    function setProjectSwapWallet(address _projectSwapWallet)
-        external
-        onlyVowAdmin
-    {
+    function setProjectSwapWallet(
+        address _projectSwapWallet
+    ) external onlyVowAdmin {
         projectSwapWallet = _projectSwapWallet;
     }
 }

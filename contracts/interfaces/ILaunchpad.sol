@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
 interface ILaunchpad {
-    function getIDO(string calldata)
+    function getIDO(
+        string calldata
+    )
         external
         view
         returns (

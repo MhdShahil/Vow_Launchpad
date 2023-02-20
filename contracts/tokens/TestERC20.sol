@@ -15,7 +15,7 @@ contract TestERC20 is ERC20, AccessControl {
         uint256 totalSupply_
     ) ERC20(name_, symbol_) {
         _decimals = decimals_;
-        _mint(msg.sender, totalSupply_ * 10**decimals_);
+        _mint(msg.sender, totalSupply_ * 10 ** decimals_);
         _grantRole(MINTER_ROLE, msg.sender);
     }
 
