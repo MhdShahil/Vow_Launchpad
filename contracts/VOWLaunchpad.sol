@@ -69,16 +69,7 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
         address indexed investor,
         uint256 investment
     );
-    // event ProjectInvestmentClaim(
-    //     string projectId,
-    //     address indexed investor,
-    //     uint256 tokenAmount
-    // );
-    // event ProjectInvestmentRefund(
-    //     string projectId,
-    //     address indexed investor,
-    //     uint256 refundAmount
-    // );
+
     event TransferOfETHFail(address indexed receiver, uint256 indexed amount);
 
     /* Modifiers */
@@ -292,6 +283,23 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
         emit ProjectAdd(projectId, projectTokenName, projectLockInTime);
     }
 
+    /**
+     * @notice This method is used to add returns to a Project
+     * @dev This method can only be called by the contract owner
+     * @param projectId ID of the Project
+     * @param _projectReturnAmount Project return amount for dynamic projects
+     */
+    function addReturn(
+        string calldata projectId,
+        uint256 _projectReturnAmount
+    ) external onlyVowAdmin onlyValid(projectId) {
+        require(
+            _projects[projectId].projectType,
+            "VOWLaunchpad: Project doesn't support dynamic returns"
+        );
+        _projects[projectId].projectReturnAmount = _projectReturnAmount;
+    }
+
     // /**
     //  * @notice This method is used to cancel a Project
     //  * @dev This method can only be called by the contract owner
@@ -399,8 +407,11 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
         );
 
         _projectInvestments[projectId].collected = true;
-        uint256 returnTokensAmount = (_projectTokenAmount * 100) /
-            project.targetInvestmentInVow;
+        if (!_projects[projectId].projectType) {
+            _projects[projectId].projectReturnAmount =
+                (_projectTokenAmount * 100) /
+                project.targetInvestmentInVow;
+        }
         projectToken.send(address(this), _projectTokenAmount, "");
 
         IERC20Upgradeable(vowToken).safeTransferFrom(
@@ -410,13 +421,17 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
         );
         if (_projects[projectId].projectType) {
             IERC20Upgradeable(_projects[projectId].projectReturnTokens)
-                .transferFrom(address(this), msg.sender, returnTokensAmount);
+                .transferFrom(
+                    address(this),
+                    msg.sender,
+                    _projects[projectId].projectReturnAmount
+                );
         } else {
             IERC20Upgradeable(_projects[projectId].projectReturnTokens)
                 .transferFrom(
                     project.projectTreasury,
                     msg.sender,
-                    returnTokensAmount
+                    _projects[projectId].projectReturnAmount
                 );
         }
         projectToken.burn(_projectTokenAmount, "");
