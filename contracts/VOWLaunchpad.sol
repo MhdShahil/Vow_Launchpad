@@ -6,20 +6,21 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC777/ERC777Upgradeable.sol";
+import "@openzeppelin/contracts/token/ERC777/ERC777.sol";
+//import "@openzeppelin/contracts/token/ERC777/IERC777.sol";
+import "@openzeppelin/contracts/token/ERC777/IERC777Recipient.sol";
 import "./common/VOWControl.sol";
 import "./PriceOracle/PriceOracle.sol";
 
-//import "./interfaces/ITestERC20.sol";
+import "./interfaces/ITestERC20.sol";
 import "./interfaces/IVOWProjectToken.sol";
 
-contract VOWLaunchpad is VOWControl {
+contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
     using SafeERC20Upgradeable for IERC20Upgradeable;
+    // IERC1820Registry private _erc1820;
+    IERC20Upgradeable public vowToken;
+    IERC777 public projectToken;
 
-    ITestERC20 public vowToken;
-    IVOWProjectToken public projectToken;
-    uint256 public constant PERCENT_DENOMINATOR = 10000;
-
-    uint256 public feePercentage; // Percentage of Funds raised to be paid as fee
     uint256 public ETHFromFailedTransfers; // ETH left in the contract from failed transfers
 
     struct Project {
@@ -34,6 +35,7 @@ contract VOWLaunchpad is VOWControl {
         address projectReturnTokens; //ERC20 token in which returns are added to the project
         uint256 projectReturnAmount; // Amount of return tokens(zero for dynamic returns)
         address projectTreasury; //Address of the project treasury
+        bool exists; // Project currently in existence
     }
     struct ProjectInvestment {
         uint256 totalInvestment; // Total investment in payment token
@@ -94,19 +96,6 @@ contract VOWLaunchpad is VOWControl {
         __VOWControl_init(_vowController);
     }
 
-    /**
-     * @notice This method is used to set commission percentage for the launchpad
-     * @param _feePercentage Percentage from raised funds to be set as fee
-     */
-    function setFee(uint256 _feePercentage) external onlyVowAdmin {
-        require(
-            _feePercentage <= 10000,
-            "VOWLaunchpad: fee Percentage should be less than 10000"
-        );
-        feePercentage = _feePercentage;
-        emit SetFeePercentage(_feePercentage);
-    }
-
     /* Helper Functions */
     /* Payment Token */
     /**
@@ -115,11 +104,11 @@ contract VOWLaunchpad is VOWControl {
      * @param _paymentToken Address of payment token to be added
      */
     function addPaymentToken(
-        string projectId,
+        string calldata projectId,
         address _paymentToken
     ) external onlyVowAdmin {
         require(
-            !_paymentSupported[_paymentToken],
+            !_paymentSupported[projectId][_paymentToken],
             "VOWLaunchpad: token already added"
         );
         require(
@@ -137,7 +126,7 @@ contract VOWLaunchpad is VOWControl {
      * @param _paymentToken Address of payment token to be removed
      */
     function removePaymentToken(
-        string projectId,
+        string calldata projectId,
         address _paymentToken
     ) external onlyVowAdmin {
         require(
@@ -145,7 +134,7 @@ contract VOWLaunchpad is VOWControl {
             "VOWLaunchpad: token not added"
         );
 
-        _paymentSupported[_paymentToken] = false;
+        _paymentSupported[projectId][_paymentToken] = false;
         emit RemovePaymentToken(_paymentToken);
     }
 
@@ -154,34 +143,34 @@ contract VOWLaunchpad is VOWControl {
      * @param projectId Id of the project
      */
     function listPaymentTokens(
-        string projectId
+        string calldata projectId
     ) public view returns (address[] memory) {
         return _projects[projectId].acceptedTokens;
     }
 
-    // /**
-    //  * @notice Helper function to transfer tokens based on type
-    //  * @param receiver Address of the receiver
-    //  * @param paymentToken Address of the token to be transferred
-    //  * @param amount Number of tokens to transfer
-    //  */
-    // function transferTokens(
-    //     address receiver,
-    //     address paymentToken,
-    //     uint256 amount
-    // ) internal {
-    //     if (amount != 0) {
-    //         if (paymentToken != address(0)) {
-    //             IERC20Upgradeable(paymentToken).safeTransfer(receiver, amount);
-    //         } else {
-    //             (bool success, ) = payable(receiver).call{value: amount}("");
-    //             if (!success) {
-    //                 ETHFromFailedTransfers += amount;
-    //                 emit TransferOfETHFail(receiver, amount);
-    //             }
-    //         }
-    //     }
-    // }
+    /**
+     * @notice Helper function to transfer tokens based on type
+     * @param receiver Address of the receiver
+     * @param paymentToken Address of the token to be transferred
+     * @param amount Number of tokens to transfer
+     */
+    function transferTokens(
+        address receiver,
+        address paymentToken,
+        uint256 amount
+    ) internal {
+        if (amount != 0) {
+            if (paymentToken != address(0)) {
+                IERC20Upgradeable(paymentToken).safeTransfer(receiver, amount);
+            } else {
+                (bool success, ) = payable(receiver).call{value: amount}("");
+                if (!success) {
+                    ETHFromFailedTransfers += amount;
+                    emit TransferOfETHFail(receiver, amount);
+                }
+            }
+        }
+    }
 
     /* Project */
     /**
@@ -191,7 +180,7 @@ contract VOWLaunchpad is VOWControl {
     function projectExist(
         string calldata projectId
     ) public view returns (bool) {
-        return _projects[projectId] ? true : false;
+        return _projects[projectId].exists;
     }
 
     /**
@@ -245,13 +234,13 @@ contract VOWLaunchpad is VOWControl {
     function addProject(
         string calldata projectId,
         bool projectType,
-        string projectTokenName,
-        string projectTokenSymbol,
+        string calldata projectTokenName,
+        string calldata projectTokenSymbol,
         uint256 targetInvestmentInVow,
         uint256 minInvestmentInVow,
         uint256 projectOpenTime,
         uint256 projectLockInTime,
-        address[] acceptedTokens,
+        address[] calldata acceptedTokens,
         address projectReturnTokens,
         uint256 projectReturnAmount,
         address projectTreasury
@@ -266,10 +255,7 @@ contract VOWLaunchpad is VOWControl {
         );
 
         require(targetInvestmentInVow != 0, "VOWLaunchpad: target amount zero");
-        require(
-            projectTokenName && projectTokenSymbol != "",
-            "VOWLaunchpad: Project token name or symbol not given"
-        );
+
         require(
             block.timestamp <= projectOpenTime,
             "VOWLaunchpad: Project invalid timestamps"
@@ -286,13 +272,15 @@ contract VOWLaunchpad is VOWControl {
             acceptedTokens,
             projectReturnTokens,
             projectReturnAmount,
-            projectTreasury
+            projectTreasury,
+            true
         );
-        projectToken.initialize(
+        projectToken = new ERC777(
             projectTokenName,
             projectTokenSymbol,
-            vowController.vowAdmin()
+            new address[](0)
         );
+
         if (_projects[projectId].projectType) {
             IERC20Upgradeable(_projects[projectId].projectReturnTokens)
                 .transferFrom(
@@ -320,52 +308,6 @@ contract VOWLaunchpad is VOWControl {
     //     //     project.projectOwner,
     //     //     project.tokensForDistribution
     //     // );
-    // }
-
-    // /**
-    //  * @notice This method is used to claim investments of a user's project
-    //  * @param projectId ID of the Project
-    //  */
-    // function InvestInProject(
-    //     string calldata projectId,
-    //     address _paymentToken
-    // ) external onlyValid(projectId) {
-    //     Project memory project = _projects[projectId];
-    //     //require(!project.cancelled, "VOWLaunchpad: Project is cancelled");
-    //     require(
-    //         block.timestamp >= project.projectOpenTime,
-    //         "VOWLaunchpad: Project not open"
-    //     );
-    //     require(
-    //         _paymentSupported[projectId][_paymentToken],
-    //         "VOWLaunchpad: Payment token not supported"
-    //     );
-    //     Investor memory investor = _projectInvestors[projectId][msg.sender];
-
-    //     // validate enough days have passed from lock in period
-    //     uint256 daysPassed = (block.timestamp - project.projectCloseTime) /
-    //         1 days;
-
-    //     require(
-    //         daysPassed > projectLockInTime,
-    //         "VOWLaunchpad: Project lock-in duration not over"
-    //     );
-
-    //     uint256 platformShare = feePercentage == 0
-    //         ? 0
-    //         : (feePercentage * projectInvestment.totalInvestment) /
-    //             PERCENT_DENOMINATOR;
-
-    //     _projectInvestors[projectId][msg.sender].claimed = true;
-
-    //     transferTokens(vowController.vowTreasury(), vowToken, platformShare);
-    //     transferTokens(
-    //         project.projectOwner,
-    //         vowToken,
-    //         investor.investment - platformShare
-    //     );
-
-    //     emit ProjectInvestmentCollect(projectId);
     // }
 
     /**
@@ -409,74 +351,78 @@ contract VOWLaunchpad is VOWControl {
         if (_projectInvestors[projectId][msg.sender].investment == 0)
             ++projectInvestment.totalInvestors;
         _projectInvestors[projectId][msg.sender].investment += _amount;
+        transferTokens(project.projectTreasury, _paymentToken, _amount);
 
-        IERC20Upgradeable(_paymentToken).safeTransferFrom(
-            msg.sender,
-            vowController.vowTreasury(),
-            _amount
-        );
         uint256 amountOfVowTokens = PriceOracle.calculateTokensToVow(_amount);
         IERC20Upgradeable(vowToken).safeTransferFrom(
-            Project.projectTreasury,
+            project.projectTreasury,
             address(this),
             amountOfVowTokens
         );
-        projectToken.mint(msg.sender, amountOfVowTokens);
-
+        projectToken.operatorSend(
+            vowController.vowAdmin(),
+            msg.sender,
+            amountOfVowTokens,
+            "",
+            ""
+        );
         emit ProjectInvest(projectId, msg.sender, _amount);
     }
 
-    // /**
-    //  * @notice This method is used to refund investment if Project is cancelled
-    //  * @param projectId ID of the Project
-    //  */
-    // function refundInvestment(
-    //     string calldata projectId
-    // ) external onlyValid(projectId) {
-    //     Project memory project = _projects[projectId];
-    //     require(project.cancelled, "VOWLaunchpad: Project is not cancelled");
+    /**
+     * @notice This method is used to distribute investment raised in Project
+     * @dev This method can only be called by the contract owner
+     * @param projectId ID of the Project
+     */
+    function claimProjectInvestmentReturns(
+        string calldata projectId,
+        uint256 _projectTokenAmount
+    ) external onlyVowAdmin onlyValid(projectId) {
+        Project memory project = _projects[projectId];
+        //require(!project.cancelled, "VOWLaunchpad: Project is cancelled");
+        require(
+            block.timestamp > project.projectLockInTime,
+            "VOWLaunchpad: Project is open"
+        );
 
-    //     Investor memory user = _projectInvestors[projectId][msg.sender];
-    //     require(!user.refunded, "VOWLaunchpad: already refunded");
-    //     require(user.investment != 0, "VOWLaunchpad: no investment found");
+        ProjectInvestment memory projectInvestment = _projectInvestments[
+            projectId
+        ];
 
-    //     _projectInvestors[projectId][msg.sender].refunded = true;
-    //     transferTokens(msg.sender, project.paymentToken, user.investment);
+        require(
+            !projectInvestment.collected,
+            "VOWLaunchpad: Project investment already collected"
+        );
+        require(
+            projectInvestment.totalInvestment != 0,
+            "VOWLaunchpad: Project investment zero"
+        );
 
-    //     emit ProjectInvestmentRefund(projectId, msg.sender, user.investment);
-    // }
+        _projectInvestments[projectId].collected = true;
+        uint256 returnTokensAmount = (_projectTokenAmount * 100) /
+            project.targetInvestmentInVow;
+        projectToken.send(address(this), _projectTokenAmount, "");
 
-    // function claimProjectTokens(
-    //     string calldata projectId
-    // ) external onlyValid(projectId) {
-    //     Project memory project = _projects[projectId];
+        IERC20Upgradeable(vowToken).safeTransferFrom(
+            address(this),
+            msg.sender,
+            _projectTokenAmount
+        );
+        if (_projects[projectId].projectType) {
+            IERC20Upgradeable(_projects[projectId].projectReturnTokens)
+                .transferFrom(address(this), msg.sender, returnTokensAmount);
+        } else {
+            IERC20Upgradeable(_projects[projectId].projectReturnTokens)
+                .transferFrom(
+                    project.projectTreasury,
+                    msg.sender,
+                    returnTokensAmount
+                );
+        }
+        projectToken.burn(_projectTokenAmount, "");
 
-    //     require(!project.cancelled, "VOWLaunchpad: Project is cancelled");
-    //     require(
-    //         block.timestamp > project.projectCloseTime,
-    //         "VOWLaunchpad: Project not closed yet"
-    //     );
-
-    //     Investor memory user = _projectInvestors[projectId][msg.sender];
-    //     require(!user.claimed, "VOWLaunchpad: already claimed");
-    //     require(user.investment != 0, "VOWLaunchpad: no investment found");
-
-    //     uint256 projectTokens = estimateProjectTokens(
-    //         project.projectToken,
-    //         project.tokenPrice,
-    //         user.investment
-    //     );
-    //     _projectInvestors[projectId][msg.sender].claimed = true;
-    //     _projectInvestments[projectId]
-    //         .totalProjectTokensClaimed += projectTokens;
-
-    //     IERC20Upgradeable(project.projectToken).safeTransfer(
-    //         msg.sender,
-    //         projectTokens
-    //     );
-
-    //     emit ProjectInvestmentClaim(projectId, msg.sender, projectTokens);
-    // }
+        emit ProjectInvestmentCollect(projectId);
+    }
 
     /**
      * @notice This method is to collect any ETH left from failed transfers.
