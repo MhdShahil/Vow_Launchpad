@@ -7,39 +7,32 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC777/ERC777Upgradeable.sol";
 import "@openzeppelin/contracts/token/ERC777/ERC777.sol";
-//import "@openzeppelin/contracts/token/ERC777/IERC777.sol";
 import "@openzeppelin/contracts/token/ERC777/IERC777Recipient.sol";
 import "./common/VOWControl.sol";
-import "./PriceOracle/PriceOracle.sol";
+import "./interfaces/IPriceOracle.sol";
 
-import "./interfaces/ITestERC20.sol";
-import "./interfaces/IVOWProjectToken.sol";
-
-contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
+contract VOWLaunchpad is VOWControl {
     using SafeERC20Upgradeable for IERC20Upgradeable;
-    // IERC1820Registry private _erc1820;
+
     IERC20Upgradeable public vowToken;
-    IERC777 public projectToken;
 
     uint256 public ETHFromFailedTransfers; // ETH left in the contract from failed transfers
 
     struct Project {
         bool projectType; // 0 for fixed returns and 1 for Dynamic returns
-        string projectTokenName; // Name of the project token
-        string projectTokenSymbol; //Symbol of the project token
+        address projectToken; //Address of project token
         uint256 targetInvestmentInVow; // Funds targeted to be raised for the project
         uint256 minInvestmentInVow; // Minimum amount of vow token that can be invested
-        uint256 projectOpenTime; // Timestamp at which the Project is open
-        uint256 projectLockInTime; // Vow lock-in duration
-        address[] acceptedTokens; //List of accepted tokens
-        address projectReturnTokens; //ERC20 token in which returns are added to the project
-        uint256 projectReturnAmount; // Amount of return tokens(zero for dynamic returns)
-        address projectTreasury; //Address of the project treasury
+        uint256 openTime; // Timestamp at which the Project is open
+        uint256 lockInTime; // Vow lock-in duration
+        address returnToken; //ERC20 token in which returns are added to the project
+        uint256 returnAmount; // Amount of return tokens(zero for dynamic returns)
+        address treasury; //Address of the project treasury
         bool exists; // Project currently in existence
     }
     struct ProjectInvestment {
         uint256 totalInvestment; // Total investment in payment token
-        uint256 totalProjectTokensClaimed; // Total number of Project tokens claimed
+        //uint256 totalProjectTokensClaimed; // Total number of Project tokens claimed
         uint256 totalInvestors; // Total number of investors
         bool collected; // Boolean indicating if the investment raised in Project collected
     }
@@ -106,7 +99,7 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
             address(_paymentToken) != address(0),
             "VOWLaunchpad: Invalid payment token address"
         );
-        _projects[projectId].acceptedTokens.push(_paymentToken);
+        //_projects[projectId].acceptedTokens.push(_paymentToken);
         _paymentSupported[projectId][_paymentToken] = true;
         emit AddPaymentToken(_paymentToken);
     }
@@ -129,15 +122,15 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
         emit RemovePaymentToken(_paymentToken);
     }
 
-    /**
-     * @notice This method is used to remove Payment token
-     * @param projectId Id of the project
-     */
-    function listPaymentTokens(
-        string calldata projectId
-    ) public view returns (address[] memory) {
-        return _projects[projectId].acceptedTokens;
-    }
+    // /**
+    //  * @notice This method is used to remove Payment token
+    //  * @param projectId Id of the project
+    //  */
+    // function listPaymentTokens(
+    //     string calldata projectId
+    // ) public view returns (address[] memory) {
+    //     return _projects[projectId].acceptedTokens;
+    // }
 
     /**
      * @notice Helper function to transfer tokens based on type
@@ -217,7 +210,6 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
      * @param minInvestmentInVow Minimum amount of vow token that can be invested in Project
      * @param projectOpenTime Project open timestamp
      * @param projectLockInTime Vow lock-in duration
-     * @param acceptedTokens Addresses of payment tokens accepted
      * @param projectReturnTokens Address of project return token
      * @param projectReturnAmount Amount of project return tokens
      * @param projectTreasury address of the treasury
@@ -231,7 +223,6 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
         uint256 minInvestmentInVow,
         uint256 projectOpenTime,
         uint256 projectLockInTime,
-        address[] calldata acceptedTokens,
         address projectReturnTokens,
         uint256 projectReturnAmount,
         address projectTreasury
@@ -251,34 +242,28 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
             block.timestamp <= projectOpenTime,
             "VOWLaunchpad: Project invalid timestamps"
         );
-
+        _projects[projectId].projectToken = address(
+            new ERC777(projectTokenName, projectTokenSymbol, new address[](0))
+        );
         _projects[projectId] = Project(
             projectType,
-            projectTokenName,
-            projectTokenSymbol,
+            _projects[projectId].projectToken,
             targetInvestmentInVow,
             minInvestmentInVow,
             projectOpenTime,
             projectLockInTime,
-            acceptedTokens,
             projectReturnTokens,
             projectReturnAmount,
             projectTreasury,
             true
         );
-        projectToken = new ERC777(
-            projectTokenName,
-            projectTokenSymbol,
-            new address[](0)
-        );
 
         if (_projects[projectId].projectType) {
-            IERC20Upgradeable(_projects[projectId].projectReturnTokens)
-                .transferFrom(
-                    projectTreasury,
-                    address(this),
-                    projectReturnAmount
-                );
+            IERC20Upgradeable(_projects[projectId].returnToken).transferFrom(
+                projectTreasury,
+                address(this),
+                projectReturnAmount
+            );
         }
         emit ProjectAdd(projectId, projectTokenName, projectLockInTime);
     }
@@ -297,26 +282,8 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
             _projects[projectId].projectType,
             "VOWLaunchpad: Project doesn't support dynamic returns"
         );
-        _projects[projectId].projectReturnAmount = _projectReturnAmount;
+        _projects[projectId].returnAmount = _projectReturnAmount;
     }
-
-    // /**
-    //  * @notice This method is used to cancel a Project
-    //  * @dev This method can only be called by the contract owner
-    //  * @param projectId ID of the Project
-    //  */
-    // function cancelProject(
-    //     string calldata projectId
-    // ) external onlyVowAdmin onlyValid(projectId) {
-    //     Project memory project = _projects[projectId];
-    //     require(!project.cancelled, "VOWLaunchpad: Project already cancelled");
-
-    //     _projects[projectId].cancelled = true;
-    //     // IERC20Upgradeable(project.projectToken).safeTransfer(
-    //     //     project.projectOwner,
-    //     //     project.tokensForDistribution
-    //     // );
-    // }
 
     /**
      * @notice This method is used to invest in an Project
@@ -334,7 +301,7 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
 
         Project memory project = _projects[projectId];
         require(
-            block.timestamp >= project.projectOpenTime,
+            block.timestamp >= project.openTime,
             "VOWLaunchpad: Project is not open"
         );
         require(
@@ -355,19 +322,20 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
             "VOWLaunchpad: amount exceeds target"
         );
 
-        projectInvestment.totalInvestment += _amount;
+        _projectInvestments[projectId].totalInvestment += _amount;
         if (_projectInvestors[projectId][msg.sender].investment == 0)
             ++projectInvestment.totalInvestors;
         _projectInvestors[projectId][msg.sender].investment += _amount;
-        transferTokens(project.projectTreasury, _paymentToken, _amount);
+        transferTokens(project.treasury, _paymentToken, _amount);
 
-        uint256 amountOfVowTokens = PriceOracle.calculateTokensToVow(_amount);
+        uint256 amountOfVowTokens = IPriceOracle(_paymentToken)
+            .calculateTokensToVow(_amount);
         IERC20Upgradeable(vowToken).safeTransferFrom(
-            project.projectTreasury,
+            project.treasury,
             address(this),
             amountOfVowTokens
         );
-        projectToken.operatorSend(
+        IERC777(_projects[projectId].projectToken).operatorSend(
             vowController.vowAdmin(),
             msg.sender,
             amountOfVowTokens,
@@ -389,7 +357,7 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
         Project memory project = _projects[projectId];
         //require(!project.cancelled, "VOWLaunchpad: Project is cancelled");
         require(
-            block.timestamp > project.projectLockInTime,
+            block.timestamp > project.lockInTime,
             "VOWLaunchpad: Project is open"
         );
 
@@ -407,12 +375,15 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
         );
 
         _projectInvestments[projectId].collected = true;
-        if (!_projects[projectId].projectType) {
-            _projects[projectId].projectReturnAmount =
-                (_projectTokenAmount * 100) /
-                project.targetInvestmentInVow;
-        }
-        projectToken.send(address(this), _projectTokenAmount, "");
+        uint256 returnTokensToUser = (_projectTokenAmount *
+            _projects[projectId].returnAmount) /
+            _projectInvestments[projectId].totalInvestment;
+
+        IERC777(_projects[projectId].projectToken).send(
+            address(this),
+            _projectTokenAmount,
+            ""
+        );
 
         IERC20Upgradeable(vowToken).safeTransferFrom(
             address(this),
@@ -420,21 +391,22 @@ contract VOWLaunchpad is VOWControl, PriceOracle, IERC777Recipient {
             _projectTokenAmount
         );
         if (_projects[projectId].projectType) {
-            IERC20Upgradeable(_projects[projectId].projectReturnTokens)
-                .transferFrom(
-                    address(this),
-                    msg.sender,
-                    _projects[projectId].projectReturnAmount
-                );
+            IERC20Upgradeable(_projects[projectId].returnToken).transferFrom(
+                address(this),
+                msg.sender,
+                returnTokensToUser
+            );
         } else {
-            IERC20Upgradeable(_projects[projectId].projectReturnTokens)
-                .transferFrom(
-                    project.projectTreasury,
-                    msg.sender,
-                    _projects[projectId].projectReturnAmount
-                );
+            IERC20Upgradeable(_projects[projectId].returnToken).transferFrom(
+                project.treasury,
+                msg.sender,
+                returnTokensToUser
+            );
         }
-        projectToken.burn(_projectTokenAmount, "");
+        IERC777(_projects[projectId].projectToken).burn(
+            _projectTokenAmount,
+            ""
+        );
 
         emit ProjectInvestmentCollect(projectId);
     }

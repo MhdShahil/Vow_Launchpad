@@ -51,5 +51,5 @@ contract PriceOracle is VOWControl {
 
     function calculateTokensToVow(
         uint256 _amount
-    ) public view returns (uint256) {}
+    ) external view returns (uint256) {}
 }
